@@ -2,10 +2,10 @@ package com.sleticalboy.pluginization.util;
 
 import android.content.Context;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 
-import java.lang.reflect.Proxy;
-import java.util.Arrays;
+import java.lang.reflect.Method;
 
 /**
  * Created on 19-7-9.
@@ -15,7 +15,7 @@ import java.util.Arrays;
 public final class Hooks {
 
     private static final String TAG = "Hooks";
-    private static final int LAUNCH_ACTIVITY = 100;
+    public static final int LAUNCH_ACTIVITY = 100;
     public static final int PAUSE_ACTIVITY = 101;
     public static final int PAUSE_ACTIVITY_FINISHING = 102;
     public static final int STOP_ACTIVITY_SHOW = 103;
@@ -32,7 +32,6 @@ public final class Hooks {
     public static final int CREATE_SERVICE = 114;
     public static final int SERVICE_ARGS = 115;
     public static final int STOP_SERVICE = 116;
-
     public static final int CONFIGURATION_CHANGED = 118;
     public static final int CLEAN_UP_CONTEXT = 119;
     public static final int GC_WHEN_IDLE = 120;
@@ -74,36 +73,38 @@ public final class Hooks {
         throw new AssertionError();
     }
 
-    public static void hookHandlerCallback() {
+    public static void hookHandlerCallback(InvokingListener listener) {
+        if (listener == null) {
+            throw new NullPointerException("hookHandlerCallback() listener == null");
+        }
         final Object sCat = Reflections.getField("android.app.ActivityThread",
                 "sCurrentActivityThread", null);
         final Object mH = Reflections.getField(sCat, "mH", sCat);
-        Reflections.setField(Handler.class, mH, "mCallback", (Handler.Callback) msg -> {
-            Log.d(TAG, "hookHandlerCallback handleMessage() action: "
-                    + codeToString(msg.what).toLowerCase() + ", msg: " + msg);
-            // 此处返回值很重要，如果返回 true，有可能 app 不能正常运行
-            return false;
-        });
+        Reflections.setField(Handler.class, mH, "mCallback",
+                // 此处返回值很重要，如果返回 true，有可能 app 不能正常运行
+                (Handler.Callback) listener::onMessage
+        );
     }
 
-    public static void hookActivityManager(Context context) {
+    public static void hookActivityManager(final Context context, final InvokingListener listener) {
         final Object singleton = Reflections.getField(
                 "android.app.ActivityManager", "IActivityManagerSingleton", null);
         final Object rawAm = Reflections.getField("android.util.Singleton", "mInstance", singleton);
         Log.d(TAG, "hookActivityManager singleton: " + singleton + ", rawAm: " + rawAm);
 
-        try {
-            final Class[] interfaces = {Class.forName("android.app.IActivityManager")};
-            final Object proxyAm = Proxy.newProxyInstance(context.getClassLoader(), interfaces,
-                    (o, method, args) -> {
-                        Log.d(TAG, "hookActivityManager invoke() " + method.getName()
-                                + ", args: " + Arrays.toString(args));
-                        return method.invoke(rawAm, args);
-                    });
-            Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
+        final Object proxyAm = Proxies.newAmProxy(context, (o, method, args) -> {
+            if (listener != null) {
+                listener.before(rawAm, method, args);
+            }
+            final Object rawResult = method.invoke(rawAm, args);
+            if (listener != null) {
+                listener.after(rawResult);
+            }
+            return rawResult;
+        });
+        Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
+        if (proxyAm != null) {
             Reflections.setField("android.util.Singleton", singleton, "mInstance", proxyAm);
-        } catch (Throwable e) {
-            Log.e(TAG, "hookActivityManager onCreate: error", e);
         }
     }
 
@@ -111,116 +112,185 @@ public final class Hooks {
         //
     }
 
-    private static String codeToString(int code) {
+    public static String codeToString(int code) {
+        final String result;
         switch (code) {
             case LAUNCH_ACTIVITY:
-                return "LAUNCH_ACTIVITY";
+                result = "LAUNCH_ACTIVITY";
+                break;
             case PAUSE_ACTIVITY:
-                return "PAUSE_ACTIVITY";
+                result = "PAUSE_ACTIVITY";
+                break;
             case PAUSE_ACTIVITY_FINISHING:
-                return "PAUSE_ACTIVITY_FINISHING";
+                result = "PAUSE_ACTIVITY_FINISHING";
+                break;
             case STOP_ACTIVITY_SHOW:
-                return "STOP_ACTIVITY_SHOW";
+                result = "STOP_ACTIVITY_SHOW";
+                break;
             case STOP_ACTIVITY_HIDE:
-                return "STOP_ACTIVITY_HIDE";
+                result = "STOP_ACTIVITY_HIDE";
+                break;
             case SHOW_WINDOW:
-                return "SHOW_WINDOW";
+                result = "SHOW_WINDOW";
+                break;
             case HIDE_WINDOW:
-                return "HIDE_WINDOW";
+                result = "HIDE_WINDOW";
+                break;
             case RESUME_ACTIVITY:
-                return "RESUME_ACTIVITY";
+                result = "RESUME_ACTIVITY";
+                break;
             case SEND_RESULT:
-                return "SEND_RESULT";
+                result = "SEND_RESULT";
+                break;
             case DESTROY_ACTIVITY:
-                return "DESTROY_ACTIVITY";
+                result = "DESTROY_ACTIVITY";
+                break;
             case BIND_APPLICATION:
-                return "BIND_APPLICATION";
+                result = "BIND_APPLICATION";
+                break;
             case EXIT_APPLICATION:
-                return "EXIT_APPLICATION";
+                result = "EXIT_APPLICATION";
+                break;
             case NEW_INTENT:
-                return "NEW_INTENT";
+                result = "NEW_INTENT";
+                break;
             case RECEIVER:
-                return "RECEIVER";
+                result = "RECEIVER";
+                break;
             case CREATE_SERVICE:
-                return "CREATE_SERVICE";
+                result = "CREATE_SERVICE";
+                break;
             case SERVICE_ARGS:
-                return "SERVICE_ARGS";
+                result = "SERVICE_ARGS";
+                break;
             case STOP_SERVICE:
-                return "STOP_SERVICE";
+                result = "STOP_SERVICE";
+                break;
             case CONFIGURATION_CHANGED:
-                return "CONFIGURATION_CHANGED";
+                result = "CONFIGURATION_CHANGED";
+                break;
             case CLEAN_UP_CONTEXT:
-                return "CLEAN_UP_CONTEXT";
+                result = "CLEAN_UP_CONTEXT";
+                break;
             case GC_WHEN_IDLE:
-                return "GC_WHEN_IDLE";
+                result = "GC_WHEN_IDLE";
+                break;
             case BIND_SERVICE:
-                return "BIND_SERVICE";
+                result = "BIND_SERVICE";
+                break;
             case UNBIND_SERVICE:
-                return "UNBIND_SERVICE";
+                result = "UNBIND_SERVICE";
+                break;
             case DUMP_SERVICE:
-                return "DUMP_SERVICE";
+                result = "DUMP_SERVICE";
+                break;
             case LOW_MEMORY:
-                return "LOW_MEMORY";
+                result = "LOW_MEMORY";
+                break;
             case ACTIVITY_CONFIGURATION_CHANGED:
-                return "ACTIVITY_CONFIGURATION_CHANGED";
+                result = "ACTIVITY_CONFIGURATION_CHANGED";
+                break;
             case ACTIVITY_MOVED_TO_DISPLAY:
-                return "ACTIVITY_MOVED_TO_DISPLAY";
+                result = "ACTIVITY_MOVED_TO_DISPLAY";
+                break;
             case RELAUNCH_ACTIVITY:
-                return "RELAUNCH_ACTIVITY";
+                result = "RELAUNCH_ACTIVITY";
+                break;
             case PROFILER_CONTROL:
-                return "PROFILER_CONTROL";
+                result = "PROFILER_CONTROL";
+                break;
             case CREATE_BACKUP_AGENT:
-                return "CREATE_BACKUP_AGENT";
+                result = "CREATE_BACKUP_AGENT";
+                break;
             case DESTROY_BACKUP_AGENT:
-                return "DESTROY_BACKUP_AGENT";
+                result = "DESTROY_BACKUP_AGENT";
+                break;
             case SUICIDE:
-                return "SUICIDE";
+                result = "SUICIDE";
+                break;
             case REMOVE_PROVIDER:
-                return "REMOVE_PROVIDER";
+                result = "REMOVE_PROVIDER";
+                break;
             case ENABLE_JIT:
-                return "ENABLE_JIT";
+                result = "ENABLE_JIT";
+                break;
             case DISPATCH_PACKAGE_BROADCAST:
-                return "DISPATCH_PACKAGE_BROADCAST";
+                result = "DISPATCH_PACKAGE_BROADCAST";
+                break;
             case SCHEDULE_CRASH:
-                return "SCHEDULE_CRASH";
+                result = "SCHEDULE_CRASH";
+                break;
             case DUMP_HEAP:
-                return "DUMP_HEAP";
+                result = "DUMP_HEAP";
+                break;
             case DUMP_ACTIVITY:
-                return "DUMP_ACTIVITY";
+                result = "DUMP_ACTIVITY";
+                break;
             case SLEEPING:
-                return "SLEEPING";
+                result = "SLEEPING";
+                break;
             case SET_CORE_SETTINGS:
-                return "SET_CORE_SETTINGS";
+                result = "SET_CORE_SETTINGS";
+                break;
             case UPDATE_PACKAGE_COMPATIBILITY_INFO:
-                return "UPDATE_PACKAGE_COMPATIBILITY_INFO";
+                result = "UPDATE_PACKAGE_COMPATIBILITY_INFO";
+                break;
             case TRIM_MEMORY:
-                return "TRIM_MEMORY";
+                result = "TRIM_MEMORY";
+                break;
             case DUMP_PROVIDER:
-                return "DUMP_PROVIDER";
+                result = "DUMP_PROVIDER";
+                break;
             case UNSTABLE_PROVIDER_DIED:
-                return "UNSTABLE_PROVIDER_DIED";
+                result = "UNSTABLE_PROVIDER_DIED";
+                break;
             case REQUEST_ASSIST_CONTEXT_EXTRAS:
-                return "REQUEST_ASSIST_CONTEXT_EXTRAS";
+                result = "REQUEST_ASSIST_CONTEXT_EXTRAS";
+                break;
             case TRANSLUCENT_CONVERSION_COMPLETE:
-                return "TRANSLUCENT_CONVERSION_COMPLETE";
+                result = "TRANSLUCENT_CONVERSION_COMPLETE";
+                break;
             case INSTALL_PROVIDER:
-                return "INSTALL_PROVIDER";
+                result = "INSTALL_PROVIDER";
+                break;
             case ON_NEW_ACTIVITY_OPTIONS:
-                return "ON_NEW_ACTIVITY_OPTIONS";
+                result = "ON_NEW_ACTIVITY_OPTIONS";
+                break;
             case ENTER_ANIMATION_COMPLETE:
-                return "ENTER_ANIMATION_COMPLETE";
+                result = "ENTER_ANIMATION_COMPLETE";
+                break;
             case MULTI_WINDOW_MODE_CHANGED:
-                return "MULTI_WINDOW_MODE_CHANGED";
+                result = "MULTI_WINDOW_MODE_CHANGED";
+                break;
             case PICTURE_IN_PICTURE_MODE_CHANGED:
-                return "PICTURE_IN_PICTURE_MODE_CHANGED";
+                result = "PICTURE_IN_PICTURE_MODE_CHANGED";
+                break;
             case LOCAL_VOICE_INTERACTION_STARTED:
-                return "LOCAL_VOICE_INTERACTION_STARTED";
+                result = "LOCAL_VOICE_INTERACTION_STARTED";
+                break;
             case ATTACH_AGENT:
-                return "ATTACH_AGENT";
+                result = "ATTACH_AGENT";
+                break;
             case APPLICATION_INFO_CHANGED:
-                return "APPLICATION_INFO_CHANGED";
+                result = "APPLICATION_INFO_CHANGED";
+                break;
             default:
-                return Integer.toString(code);
+                result = Integer.toString(code);
+                break;
+        }
+        return result.toLowerCase();
+    }
+
+    abstract public static class InvokingListener {
+
+        public void before(Object rawObj, Method method, Object... args) {
+        }
+
+        public void after(Object result) {
+        }
+
+        public boolean onMessage(Message msg) {
+            return false;
         }
     }
 }
