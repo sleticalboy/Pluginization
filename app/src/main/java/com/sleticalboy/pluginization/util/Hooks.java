@@ -1,14 +1,26 @@
 package com.sleticalboy.pluginization.util;
 
+import android.app.Activity;
 import android.app.Application;
+import android.app.Instrumentation;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ActivityInfo;
+import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Message;
+import android.os.PersistableBundle;
+import android.util.ArrayMap;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.alibaba.fastjson.JSON;
 
 import java.lang.reflect.Method;
+import java.util.Map;
 
 /**
  * Created on 19-7-9.
@@ -112,7 +124,7 @@ public final class Hooks {
     }
 
     public static void hookPackageManager(Context context) {
-        //
+        // dynamic proxy
     }
 
     public static String codeToString(int code) {
@@ -323,6 +335,16 @@ public final class Hooks {
         };
         Hooks.hookHandlerCallback(listener);
         Hooks.hookActivityManager(app, listener);
+
+        hookInstrumentation();
+    }
+
+    public static void hookInstrumentation() {
+        final Object sCat = Reflections.getField("android.app.ActivityThread",
+                "sCurrentActivityThread", null);
+        final Object rawInst = Reflections.getField(sCat, "mInstrumentation", sCat);
+        final HookedInstrumentation hooked = new HookedInstrumentation((Instrumentation) rawInst);
+        Reflections.setField(sCat, sCat, "mInstrumentation", hooked);
     }
 
     abstract public static class InvokingListener {
@@ -335,6 +357,38 @@ public final class Hooks {
 
         public boolean onMessage(Message msg) {
             return false;
+        }
+    }
+
+    public static class HookedInstrumentation extends Instrumentation {
+
+        private static final String TAG = "HookedInst";
+
+        private final Instrumentation mBase;
+
+        protected HookedInstrumentation(Instrumentation base) {
+            mBase = base;
+            Log.d(TAG, "HookedInstrumentation() base: " + base);
+        }
+
+        @Override
+        public Activity newActivity(ClassLoader cl, String className, Intent intent)
+                throws ClassNotFoundException, IllegalAccessException, InstantiationException {
+            Log.d(TAG, "newActivity() called with: cl = [" + cl + "], className = [" + className + "], intent = [" + intent + "]");
+            return mBase.newActivity(cl, className, intent);
+        }
+
+        @Override
+        public void callActivityOnCreate(Activity activity, Bundle icicle) {
+            Log.d(TAG, "callActivityOnCreate() act: " + activity + ", icicle: " + icicle);
+            mBase.callActivityOnCreate(activity, icicle);
+        }
+
+        @Override
+        public void callActivityOnCreate(Activity activity, Bundle icicle, PersistableBundle persistentState) {
+            Log.d(TAG, "callActivityOnCreate() act: " + activity + ", icicle: " + icicle
+                    + ", persistentState: " + persistentState);
+            mBase.callActivityOnCreate(activity, icicle, persistentState);
         }
     }
 }
