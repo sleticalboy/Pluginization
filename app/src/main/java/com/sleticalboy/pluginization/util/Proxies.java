@@ -21,7 +21,7 @@ public final class Proxies {
 
     public static Object newAmProxy(final Context context, final InvocationHandler handler) {
         try {
-            final Class[] interfaces = {Reflections.refer("android.app.IActivityManager")};
+            final Class<?>[] interfaces = {Reflections.refer("android.app.IActivityManager")};
             final Object proxyAm = Proxy.newProxyInstance(context.getClassLoader(), interfaces, handler);
             Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
             return proxyAm;

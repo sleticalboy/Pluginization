@@ -33,7 +33,7 @@ public final class Reflections {
             throw new IllegalArgumentException("target and instance are both null.");
         }
         if (target instanceof Class) {
-            return getField(((Class) target), fieldName, instance);
+            return getField(((Class<?>) target), fieldName, instance);
         } else if (target instanceof String) {
             return getField(((String) target), fieldName, instance);
         } else {
@@ -58,7 +58,7 @@ public final class Reflections {
         }
     }
 
-    private static Object getField(Class cls, String fieldName, Object instance) {
+    private static Object getField(Class<?> cls, String fieldName, Object instance) {
         try {
             final Field f = cls.getField(fieldName);
             f.setAccessible(true);
@@ -68,12 +68,16 @@ public final class Reflections {
         }
     }
 
-    private static Object getField0(Class cls, String fieldName, Object instance) {
+    private static Object getField0(Class<?> cls, String fieldName, Object instance) {
         try {
             final Field f = cls.getDeclaredField(fieldName);
             f.setAccessible(true);
             return f.get(instance);
         } catch (Throwable e) {
+            if (e instanceof NoSuchFieldException) {
+                // recurse for parent
+                return getField0(cls.getSuperclass(), fieldName, instance);
+            }
             log("getField0() error cls: " + cls.getName() + ", fieldName: " + fieldName, e);
             return null;
         }
@@ -94,7 +98,7 @@ public final class Reflections {
             throw new IllegalArgumentException("target and instance can not be both null.");
         }
         if (target instanceof Class) {
-            return setField(((Class) target), instance, field, fieldName);
+            return setField(((Class<?>) target), instance, field, fieldName);
         } else if (target instanceof String) {
             return setField(((String) target), instance, field, fieldName);
         } else {
@@ -118,7 +122,7 @@ public final class Reflections {
         }
     }
 
-    private static boolean setField(Class cls, Object instance, Object field, String fieldName) {
+    private static boolean setField(Class<?> cls, Object instance, Object field, String fieldName) {
         try {
             final Field f = cls.getField(fieldName);
             f.setAccessible(true);
@@ -129,7 +133,7 @@ public final class Reflections {
         }
     }
 
-    private static boolean setField0(Class cls, Object instance, Object field, String fieldName) {
+    private static boolean setField0(Class<?> cls, Object instance, Object field, String fieldName) {
         try {
             final Field f = cls.getDeclaredField(fieldName);
             f.setAccessible(true);
@@ -163,7 +167,7 @@ public final class Reflections {
     }
 
     private static Object invokeMethod0(Class<?> targetCls, Object instance, String methodName,
-                                        Class[] paramTypes, Object... args) {
+                                        Class<?>[] paramTypes, Object... args) {
         try {
             final Method m = targetCls.getDeclaredMethod(methodName, paramTypes);
             m.setAccessible(true);
@@ -175,12 +179,12 @@ public final class Reflections {
         }
     }
 
-    public static Class refer(Object target) throws Throwable {
+    public static Class<?> refer(Object target) throws Throwable {
         if (target == null) {
             throw new IllegalArgumentException("onObj(): target is null.");
         }
         if (target instanceof Class) {
-            return ((Class) target);
+            return ((Class<?>) target);
         } else if (target instanceof String) {
             return Class.forName(((String) target));
         } else {
