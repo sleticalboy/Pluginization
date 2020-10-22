@@ -1,23 +1,14 @@
 package com.sleticalboy.pluginization.util;
 
-import android.app.Activity;
 import android.app.Application;
-import android.app.Instrumentation;
 import android.content.Context;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.os.PersistableBundle;
-import android.util.ArrayMap;
 import android.util.Log;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import com.alibaba.fastjson.JSON;
 
 import java.lang.reflect.Method;
-import java.util.Map;
 
 /**
  * Created on 19-7-9.
@@ -332,26 +323,6 @@ public final class Hooks {
         };
         Hooks.hookHandlerCallback(listener);
         Hooks.hookActivityManager(app, listener);
-        Hooks.hookInstrumentation(app);
-    }
-
-    private static void hookInstrumentation(Application app) {
-        // start hook Activity#mInstrumentation
-        app.registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacksAdapter() {
-
-            private final Map<String, HookedInstrumentation> mCache = new ArrayMap<>();
-
-            @Override
-            public void onActivityCreated(@NonNull Activity activity, @Nullable Bundle savedInstanceState) {
-                HookedInstrumentation cache = mCache.get(activity.getClass().getName());
-                if (cache == null) {
-                    final Object raw = Reflections.getField(activity, "mInstrumentation", activity);
-                    cache = new HookedInstrumentation((Instrumentation) raw);
-                    Log.d(TAG, "onActivityCreated() cache: " + cache);
-                    mCache.put(activity.getClass().getName(), cache);
-                }
-            }
-        });
     }
 
     abstract public static class InvokingListener {
@@ -364,31 +335,6 @@ public final class Hooks {
 
         public boolean onMessage(Message msg) {
             return false;
-        }
-    }
-
-    public static class HookedInstrumentation extends Instrumentation {
-
-        private static final String TAG = "HookedInstrumentation";
-
-        private final Instrumentation mBase;
-
-        protected HookedInstrumentation(Instrumentation base) {
-            mBase = base;
-            Log.d(TAG, "HookedInstrumentation() base: " + base);
-        }
-
-        @Override
-        public void callActivityOnCreate(Activity activity, Bundle icicle) {
-            Log.d(TAG, "callActivityOnCreate() act: " + activity + ", icicle: " + icicle);
-            super.callActivityOnCreate(activity, icicle);
-        }
-
-        @Override
-        public void callActivityOnCreate(Activity activity, Bundle icicle, PersistableBundle persistentState) {
-            Log.d(TAG, "callActivityOnCreate() act: " + activity + ", icicle: " + icicle
-                    + ", persistentState: " + persistentState);
-            super.callActivityOnCreate(activity, icicle, persistentState);
         }
     }
 }
