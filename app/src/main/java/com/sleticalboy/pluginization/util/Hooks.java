@@ -83,6 +83,7 @@ public final class Hooks {
     public static final int ATTACH_AGENT = 155;
     public static final int APPLICATION_INFO_CHANGED = 156;
     public static final int ACTIVITY_MOVED_TO_DISPLAY = 157;
+    public static final int EXECUTE_TRANSACTION = 159;
 
     private Hooks() {
         throw new AssertionError();
@@ -289,11 +290,14 @@ public final class Hooks {
             case APPLICATION_INFO_CHANGED:
                 result = "APPLICATION_INFO_CHANGED";
                 break;
+            case EXECUTE_TRANSACTION:
+                result = "EXECUTE_TRANSACTION";
+                break;
             default:
                 result = Integer.toString(code);
                 break;
         }
-        return result.toLowerCase();
+        return result;
     }
 
     public static void init(Application app) {
@@ -307,8 +311,23 @@ public final class Hooks {
             @Override
             public void before(final Object rawObj, final Method method, final Object... args) {
                 mName = method.getName();
+                Log.d(TAG, "method --------> " + mName);
                 if ("startActivity".equals(mName)) {
-                    Log.d(TAG, "args: " + JSON.toJSONString(args));
+                    // Log.d(TAG, "args: " + JSON.toJSONString(args));
+                    // 启动未在 AndroidManifest.xml 文件中注册的 Activity
+                    int index = -1;
+                    for (int i = 0; i < args.length; i++) {
+                        if (args[i] instanceof Intent) {
+                            // 找到第一个 Intent 参数进行加工
+                            index = i;
+                            break;
+                        }
+                    }
+                    if (index >= 0) {
+                        final Intent raw = (Intent) args[index];
+                        Log.d(TAG, "index: " + index + ", raw intent: " + raw);
+                        // 替换 component 为空壳 Activity
+                    }
                 }
             }
 
@@ -326,8 +345,10 @@ public final class Hooks {
                     case Hooks.LAUNCH_ACTIVITY:
                     case Hooks.PAUSE_ACTIVITY:
                     case Hooks.RESUME_ACTIVITY:
+                        break;
+                    case Hooks.EXECUTE_TRANSACTION:
                         Log.d(TAG, "onMessage() action: " + Hooks.codeToString(msg.what)
-                                + ", msg: " + msg);
+                                + ", msg: " + JSON.toJSONString(msg));
                         break;
                 }
                 return super.onMessage(msg);
