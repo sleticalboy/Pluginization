@@ -326,10 +326,10 @@ public final class Hooks {
                     case Hooks.LAUNCH_ACTIVITY:
                     case Hooks.PAUSE_ACTIVITY:
                     case Hooks.RESUME_ACTIVITY:
+                        Log.d(TAG, "onMessage() action: " + Hooks.codeToString(msg.what)
+                                + ", msg: " + msg);
                         break;
                 }
-                Log.d(TAG, "onMessage() action: " + Hooks.codeToString(msg.what)
-                        + ", msg: " + msg);
                 return super.onMessage(msg);
             }
         };
