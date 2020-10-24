@@ -6,22 +6,13 @@ import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Message;
 import android.os.PersistableBundle;
-import android.util.ArrayMap;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import com.alibaba.fastjson.JSON;
-
 import java.lang.reflect.Method;
-import java.util.Map;
 
 /**
  * Created on 19-7-9.
@@ -90,8 +81,8 @@ public final class Hooks {
         throw new AssertionError();
     }
 
-    public static void hookHandlerCallback(InvokingListener listener) {
-        if (listener == null) {
+    public static void hookHandlerCallback(MessageInterceptor interceptor) {
+        if (interceptor == null) {
             throw new NullPointerException("hookHandlerCallback() listener == null");
         }
         final Object sCat = Reflections.getField("android.app.ActivityThread",
@@ -99,7 +90,7 @@ public final class Hooks {
         final Object mH = Reflections.getField(sCat, "mH", sCat);
         Reflections.setField(Handler.class, mH, "mCallback",
                 // 此处返回值很重要，如果返回 true，有可能 app 不能正常运行
-                (Handler.Callback) listener::onMessage
+                (Handler.Callback) interceptor::onMessage
         );
     }
 
@@ -305,7 +296,22 @@ public final class Hooks {
         if (app == null) {
             return;
         }
-        final Hooks.InvokingListener listener = new Hooks.InvokingListener() {
+        Hooks.hookHandlerCallback(msg -> {
+            switch (msg.what) {
+                default:
+                case Hooks.LAUNCH_ACTIVITY:
+                case Hooks.PAUSE_ACTIVITY:
+                case Hooks.RESUME_ACTIVITY:
+                    break;
+                case Hooks.EXECUTE_TRANSACTION:
+                    Log.d(TAG, "onMessage() action: " + Hooks.codeToString(msg.what)
+                            + ", msg: " + /*JSON.toJSONString(msg)*/msg);
+                    break;
+            }
+            return false;
+        });
+
+        Hooks.hookActivityManager(app, new Hooks.InvokingListener() {
 
             String mName;
 
@@ -341,25 +347,7 @@ public final class Hooks {
                     Log.d(TAG, "afterInvoke() result: " + result);
                 }
             }
-
-            @Override
-            public boolean onMessage(final Message msg) {
-                switch (msg.what) {
-                    default:
-                    case Hooks.LAUNCH_ACTIVITY:
-                    case Hooks.PAUSE_ACTIVITY:
-                    case Hooks.RESUME_ACTIVITY:
-                        break;
-                    case Hooks.EXECUTE_TRANSACTION:
-                        Log.d(TAG, "onMessage() action: " + Hooks.codeToString(msg.what)
-                                + ", msg: " + /*JSON.toJSONString(msg)*/msg);
-                        break;
-                }
-                return super.onMessage(msg);
-            }
-        };
-        Hooks.hookHandlerCallback(listener);
-        Hooks.hookActivityManager(app, listener);
+        });
 
         hookInstrumentation();
     }
@@ -379,10 +367,11 @@ public final class Hooks {
 
         public void after(Object result) {
         }
+    }
 
-        public boolean onMessage(Message msg) {
-            return false;
-        }
+    public interface MessageInterceptor {
+
+        boolean onMessage(Message msg);
     }
 
     public static class HookedInstrumentation extends Instrumentation {
