@@ -3,6 +3,7 @@ package com.sleticalboy.pluginization.util;
 import android.app.Activity;
 import android.app.Application;
 import android.app.Instrumentation;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -327,6 +328,9 @@ public final class Hooks {
                         final Intent raw = (Intent) args[index];
                         Log.d(TAG, "index: " + index + ", raw intent: " + raw);
                         // 替换 component 为空壳 Activity
+                        final ComponentName component = new ComponentName("com.sleticalboy.pluginization",
+                                "com.sleticalboy.pluginization.NoNameActivity");
+                        raw.putExtra("real_activity", component);
                     }
                 }
             }
@@ -348,7 +352,7 @@ public final class Hooks {
                         break;
                     case Hooks.EXECUTE_TRANSACTION:
                         Log.d(TAG, "onMessage() action: " + Hooks.codeToString(msg.what)
-                                + ", msg: " + JSON.toJSONString(msg));
+                                + ", msg: " + /*JSON.toJSONString(msg)*/msg);
                         break;
                 }
                 return super.onMessage(msg);
@@ -395,7 +399,9 @@ public final class Hooks {
         @Override
         public Activity newActivity(ClassLoader cl, String className, Intent intent)
                 throws ClassNotFoundException, IllegalAccessException, InstantiationException {
-            Log.d(TAG, "newActivity() called with: cl = [" + cl + "], className = [" + className + "], intent = [" + intent + "]");
+            final ComponentName component = intent.getParcelableExtra("real_activity");
+            Log.d(TAG, "newActivity() called with: cl = [" + cl + "], className = [" + className
+                    + "], intent = [" + intent + "], real activity: " + component);
             return mBase.newActivity(cl, className, intent);
         }
 
