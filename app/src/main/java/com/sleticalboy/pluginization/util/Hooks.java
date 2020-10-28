@@ -22,7 +22,12 @@ import java.lang.reflect.Method;
  */
 public final class Hooks {
 
-    private static final String TAG = "Hooks";
+    public static final String TAG = "Hooks";
+    public static final ComponentName PROXY_COMPONENT = new ComponentName(
+            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyActivity");
+    public static final String REAL_COMPONENT = "real_component";
+
+    private static boolean sAtmHooked = false;
 
     private Hooks() {
         throw new AssertionError();
@@ -42,8 +47,8 @@ public final class Hooks {
     }
 
     public static void hookActivityManager(final Context context, final InvokeListener listener) {
-        final Object singleton = Reflections.getField(
-                "android.app.ActivityManager", "IActivityManagerSingleton", null);
+        final Object singleton = Reflections.getField("android.app.ActivityManager",
+                "IActivityManagerSingleton", null);
         final Object rawAm = Reflections.getField("android.util.Singleton", "mInstance", singleton);
         Log.d(TAG, "hookActivityManager singleton: " + singleton + ", rawAm: " + rawAm);
 
@@ -62,6 +67,32 @@ public final class Hooks {
 
     public static void hookPackageManager(Context context) {
         // dynamic proxy
+    }
+
+    public static void hookActivityTaskManager(final Context context, final InvokeListener listener) {
+        if (sAtmHooked) {
+            return;
+        }
+        final Object singleton = Reflections.getField("android.app.ActivityTaskManager",
+                "IActivityTaskManagerSingleton", null);
+        final Object rawAtm = Reflections.getField("android.util.Singleton", "mInstance", singleton);
+        Log.d(TAG, "hookActivityTaskManager singleton: " + singleton + ", rawAm: " + rawAtm);
+        if (null == rawAtm) {
+            return;
+        }
+        sAtmHooked = true;
+
+        final Object proxyAtm = Proxies.newAtmProxy(context, (o, method, args) -> {
+            if (listener == null) {
+                return method.invoke(rawAtm, args);
+            }
+            listener.before(rawAtm, method, args);
+            return listener.after(method.invoke(rawAtm, args));
+        });
+        Log.d(TAG, "hookActivityTaskManager proxyAtm: " + proxyAtm);
+        if (proxyAtm != null) {
+            Reflections.setField("android.util.Singleton", singleton, "mInstance", proxyAtm);
+        }
     }
 
     public static void init(Application app) {
@@ -83,9 +114,10 @@ public final class Hooks {
             return false;
         });
 
-        Hooks.hookActivityManager(app, new InvokeListener() {
+        hookActivityManager(app, new InvokeListener() {
 
-            String mName;
+            public static final String TAG = Hooks.TAG + "-Am";
+            private String mName;
 
             @Override
             public void before(final Object rawCaller, final Method method, final Object... args) {
@@ -105,10 +137,9 @@ public final class Hooks {
                     if (index >= 0) {
                         final Intent raw = (Intent) args[index];
                         Log.d(TAG, "index: " + index + ", raw intent: " + raw);
-                        // 替换 component 为空壳 Activity
-                        final ComponentName component = new ComponentName("com.sleticalboy.pluginization",
-                                "com.sleticalboy.pluginization.NoNameActivity");
-                        raw.putExtra("real_activity", component);
+                        // 替换 component 为 ProxyActivity, 此 Activity 已在 AndroidManifest 中声明
+                        raw.putExtra(REAL_COMPONENT, raw.getComponent());
+                        raw.setComponent(PROXY_COMPONENT);
                     }
                 }
             }
@@ -162,10 +193,11 @@ public final class Hooks {
         @Override
         public Activity newActivity(ClassLoader cl, String className, Intent intent)
                 throws ClassNotFoundException, IllegalAccessException, InstantiationException {
-            final ComponentName component = intent.getParcelableExtra("real_activity");
-            Log.d(TAG, "newActivity() called with: cl = [" + cl + "], className = [" + className
+            final ComponentName component = intent.getParcelableExtra(REAL_COMPONENT);
+            Log.d(TAG, "newActivity() called with: className = [" + className
                     + "], intent = [" + intent + "], real activity: " + component);
-            return mBase.newActivity(cl, className, intent);
+            final String realClass = null != component ? component.getClassName() : className;
+            return mBase.newActivity(cl, realClass, intent);
         }
 
         @Override

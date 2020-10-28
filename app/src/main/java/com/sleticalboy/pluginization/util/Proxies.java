@@ -23,10 +23,22 @@ public final class Proxies {
         try {
             final Class<?>[] interfaces = {Reflections.refer("android.app.IActivityManager")};
             final Object proxyAm = Proxy.newProxyInstance(context.getClassLoader(), interfaces, handler);
-            Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
+            Log.d(TAG, "newAmProxy proxyAm: " + proxyAm);
             return proxyAm;
         } catch (Throwable e) {
-            Log.e(TAG, "hookActivityManager newAmProxy: error", e);
+            Log.e(TAG, "newAmProxy newAmProxy: error", e);
+            return null;
+        }
+    }
+
+    public static Object newAtmProxy(final Context context, final InvocationHandler handler) {
+        try {
+            final Class<?>[] interfaces = {Reflections.refer("android.app.IActivityTaskManager")};
+            final Object proxyAtm = Proxy.newProxyInstance(context.getClassLoader(), interfaces, handler);
+            Log.d(TAG, "newAtmProxy() proxy: " + proxyAtm);
+            return proxyAtm;
+        } catch (Throwable e) {
+            Log.e(TAG, "newAtmProxy() error", e);
             return null;
         }
     }
