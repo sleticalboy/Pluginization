@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 
 /**
@@ -36,10 +37,6 @@ public final class Hooks {
         }
         Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
         Object mH = Reflecter.on("android.app.ActivityThread", sCat).get("mH");
-        // Object rawCallback = Reflecter.on(Handler.class, mH).get("mCallback");
-        // if (rawCallback != null && Proxy.isProxyClass(rawCallback.getClass())) {
-        //     return;
-        // }
         // 此处 callback 返回值很重要，如果返回 true，有可能 app 不能正常运行
         Reflecter.on(Handler.class, mH).set("mCallback", callback);
     }
@@ -53,17 +50,24 @@ public final class Hooks {
             return;
         }
 
-        Object proxyAm = Proxies.newAmProxy(context, (proxy, method, args) -> {
+        InvocationHandler handler = (proxy, method, args) -> {
             if (listener == null) {
                 return method.invoke(rawAm, args);
             }
             listener.before(rawAm, method.getName(), args);
             return listener.after(method.invoke(rawAm, args));
-        });
-        Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
-        if (proxyAm != null) {
-            Reflecter.on("android.util.Singleton", singleton).set("mInstance", proxyAm);
+        };
+        Object proxyAm;
+        try {
+            proxyAm = Reflecter.with(context.getClassLoader())
+                    .on("android.app.IActivityManager")
+                    .handle(handler);
+        } catch (Throwable e) {
+            Log.e(TAG, "newAmProxy error", e);
+            return;
         }
+        Reflecter.on("android.util.Singleton", singleton).set("mInstance", proxyAm);
+        Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
     }
 
     public static void hookPackageManager(Context context, InvokeListener listener) {
@@ -73,18 +77,25 @@ public final class Hooks {
         if (Proxy.isProxyClass(rawPm.getClass())) {
             return;
         }
-        // 生成 PackageManager 代理对象
-        Object proxyPm = Proxies.newPmProxy(context, (proxy, method, args) -> {
+        InvocationHandler handler = (proxy, method, args) -> {
             if (null == listener) {
                 return method.invoke(rawPm, args);
             }
             listener.before(rawPm, method.getName(), args);
             return listener.after(method.invoke(rawPm, args));
-        });
-        Log.d(TAG, "hookActivityTaskManager proxyPm: " + proxyPm);
-        if (null != proxyPm) {
-            Reflecter.on("android.app.ActivityThread", sCat).set("sPackageManager", proxyPm);
+        };
+        Object proxyPm;
+        try {
+            // 生成 PackageManager 代理对象
+            proxyPm = Reflecter.with(context.getClassLoader())
+                    .on("android.content.pm.IPackageManager")
+                    .handle(handler);
+        } catch (Throwable e) {
+            Log.e(TAG, "newPmProxy() error", e);
+            return;
         }
+        Reflecter.on("android.app.ActivityThread", sCat).set("sPackageManager", proxyPm);
+        Log.d(TAG, "hookPackageManager proxyPm: " + proxyPm);
     }
 
     public static void hookActivityTaskManager(Context context, InvokeListener listener) {
@@ -100,17 +111,24 @@ public final class Hooks {
         }
         sAtmHooked = true;
 
-        Object proxyAtm = Proxies.newAtmProxy(context, (proxy, method, args) -> {
+        InvocationHandler handler = (proxy, method, args) -> {
             if (listener == null) {
                 return method.invoke(rawAtm, args);
             }
             listener.before(rawAtm, method.getName(), args);
             return listener.after(method.invoke(rawAtm, args));
-        });
-        Log.d(TAG, "hookActivityTaskManager proxyAtm: " + proxyAtm);
-        if (proxyAtm != null) {
-            Reflecter.on("android.util.Singleton", singleton).set("mInstance", proxyAtm);
+        };
+        Object proxyAtm;
+        try {
+            proxyAtm = Reflecter.with(context.getClassLoader())
+                    .on("android.app.IActivityTaskManager")
+                    .handle(handler);
+        } catch (Throwable e) {
+            Log.e(TAG, "newAtmProxy() error", e);
+            return;
         }
+        Reflecter.on("android.util.Singleton", singleton).set("mInstance", proxyAtm);
+        Log.d(TAG, "hookActivityTaskManager proxyAtm: " + proxyAtm);
     }
 
     public static void init(Application app) {
