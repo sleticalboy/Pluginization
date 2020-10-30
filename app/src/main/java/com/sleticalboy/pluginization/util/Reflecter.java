@@ -62,6 +62,14 @@ public final class Reflecter {
         }
     }
 
+    private static String getPackage(Class<?> cls) {
+        if (null == cls) {
+            return "";
+        }
+        final Package pkg = cls.getPackage();
+        return null == pkg ? "" : pkg.getName();
+    }
+
     public static class Reflekt {
         private final Object mObj;
         private final Class<?> mCls;
@@ -90,7 +98,12 @@ public final class Reflecter {
                         return on(clazz).create(parameters, args);
                     }
                 }
-                throw new ReflectException("construct()", e);
+                String msg = e.getMessage();
+                String pkg = getPackage(mCls);
+                if (pkg.trim().length() != 0) {
+                    msg = msg.replace(pkg + ".", "");
+                }
+                throw new ReflectException(msg, e);
             }
         }
 
@@ -108,7 +121,12 @@ public final class Reflecter {
                         on(clazz, mObj).set(field, value);
                     }
                 }
-                throw new ReflectException("set()", e);
+                String msg = mCls.getName();
+                String pkg = getPackage(mCls);
+                if (pkg.trim().length() != 0) {
+                    msg = msg.replace(pkg + ".", "");
+                }
+                throw new ReflectException("set " + msg + "#" + field + " error", e);
             }
         }
 
@@ -125,7 +143,12 @@ public final class Reflecter {
                         return on(clazz, mObj).get(field);
                     }
                 }
-                throw new ReflectException("get()", e);
+                String msg = mCls.getName();
+                String pkg = getPackage(mCls);
+                if (pkg.trim().length() != 0) {
+                    msg = msg.replace(pkg + ".", "");
+                }
+                throw new ReflectException("get " + msg + "#" + field + " error", e);
             }
         }
 
@@ -147,7 +170,12 @@ public final class Reflecter {
                         return on(clazz, mObj).call(method, parameters, args);
                     }
                 }
-                throw new ReflectException("call()", e);
+                String msg = mCls.getName();
+                String pkg = getPackage(mCls);
+                if (pkg.trim().length() != 0) {
+                    msg = msg.replace(pkg + ".", "");
+                }
+                throw new ReflectException("call " + msg + "#" + method + "() error", e);
             }
         }
 
