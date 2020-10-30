@@ -21,7 +21,7 @@ public final class Proxies {
 
     public static Object newAmProxy(final Context context, final InvocationHandler handler) {
         try {
-            final Class<?>[] interfaces = {Reflections.refer("android.app.IActivityManager")};
+            final Class<?>[] interfaces = {Reflecter.forName("android.app.IActivityManager")};
             return Proxy.newProxyInstance(context.getClassLoader(), interfaces, handler);
         } catch (Throwable e) {
             Log.e(TAG, "newAmProxy newAmProxy: error", e);
@@ -31,7 +31,7 @@ public final class Proxies {
 
     public static Object newAtmProxy(final Context context, final InvocationHandler handler) {
         try {
-            final Class<?>[] interfaces = {Reflections.refer("android.app.IActivityTaskManager")};
+            final Class<?>[] interfaces = {Reflecter.forName("android.app.IActivityTaskManager")};
             return Proxy.newProxyInstance(context.getClassLoader(), interfaces, handler);
         } catch (Throwable e) {
             Log.e(TAG, "newAtmProxy() error", e);
@@ -41,7 +41,7 @@ public final class Proxies {
 
     public static Object newPmProxy(Context context, InvocationHandler handler) {
         try {
-            final Class<?>[] interfaces = {Reflections.refer("android.content.pm.IPackageManager")};
+            final Class<?>[] interfaces = {Reflecter.forName("android.content.pm.IPackageManager")};
             return Proxy.newProxyInstance(context.getClassLoader(), interfaces, handler);
         } catch (Throwable e) {
             Log.e(TAG, "newPmProxy() error", e);

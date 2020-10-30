@@ -8,10 +8,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Message;
 import android.util.Log;
 
-import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 
 /**
  * Created on 19-7-9.
@@ -31,54 +30,60 @@ public final class Hooks {
         throw new AssertionError();
     }
 
-    public static void hookHandlerCallback(MessageInterceptor interceptor) {
-        if (interceptor == null) {
-            throw new NullPointerException("hookHandlerCallback() listener == null");
+    public static void hookHandlerCallback(Handler.Callback callback) {
+        if (callback == null) {
+            throw new NullPointerException("hookHandlerCallback() callback == null");
         }
-        final Object sCat = Reflections.getField("android.app.ActivityThread",
-                "sCurrentActivityThread", null);
-        final Object mH = Reflections.getField(sCat, "mH", sCat);
-        Reflections.setField(Handler.class, mH, "mCallback",
-                // 此处返回值很重要，如果返回 true，有可能 app 不能正常运行
-                (Handler.Callback) interceptor::onMessage
-        );
+        Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
+        Object mH = Reflecter.on("android.app.ActivityThread", sCat).get("mH");
+        // Object rawCallback = Reflecter.on(Handler.class, mH).get("mCallback");
+        // if (rawCallback != null && Proxy.isProxyClass(rawCallback.getClass())) {
+        //     return;
+        // }
+        // 此处 callback 返回值很重要，如果返回 true，有可能 app 不能正常运行
+        Reflecter.on(Handler.class, mH).set("mCallback", callback);
     }
 
     public static void hookActivityManager(Context context, InvokeListener listener) {
-        final Object singleton = Reflections.getField("android.app.ActivityManager",
-                "IActivityManagerSingleton", null);
-        final Object rawAm = Reflections.getField("android.util.Singleton", "mInstance", singleton);
+        Object singleton = Reflecter.on("android.app.ActivityManager")
+                .get("IActivityManagerSingleton");
+        Object rawAm = Reflecter.on("android.util.Singleton", singleton).get("mInstance");
         Log.d(TAG, "hookActivityManager singleton: " + singleton + ", rawAm: " + rawAm);
+        if (Proxy.isProxyClass(rawAm.getClass())) {
+            return;
+        }
 
-        final Object proxyAm = Proxies.newAmProxy(context, (proxy, method, args) -> {
+        Object proxyAm = Proxies.newAmProxy(context, (proxy, method, args) -> {
             if (listener == null) {
                 return method.invoke(rawAm, args);
             }
-            listener.before(rawAm, method, args);
+            listener.before(rawAm, method.getName(), args);
             return listener.after(method.invoke(rawAm, args));
         });
         Log.d(TAG, "hookActivityManager proxyAm: " + proxyAm);
         if (proxyAm != null) {
-            Reflections.setField("android.util.Singleton", singleton, "mInstance", proxyAm);
+            Reflecter.on("android.util.Singleton", singleton).set("mInstance", proxyAm);
         }
     }
 
     public static void hookPackageManager(Context context, InvokeListener listener) {
-        final Object sCat = Reflections.getField("android.app.ActivityThread",
-                "sCurrentActivityThread", null);
+        Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
         // 获取原 sPackageManager 字段
-        final Object rawPm = Reflections.getField(sCat, "sPackageManager", sCat);
+        Object rawPm = Reflecter.on(sCat).get("sPackageManager");
+        if (Proxy.isProxyClass(rawPm.getClass())) {
+            return;
+        }
         // 生成 PackageManager 代理对象
-        final Object proxyPm = Proxies.newPmProxy(context, (proxy, method, args) -> {
+        Object proxyPm = Proxies.newPmProxy(context, (proxy, method, args) -> {
             if (null == listener) {
                 return method.invoke(rawPm, args);
             }
-            listener.before(rawPm, method, args);
+            listener.before(rawPm, method.getName(), args);
             return listener.after(method.invoke(rawPm, args));
         });
         Log.d(TAG, "hookActivityTaskManager proxyPm: " + proxyPm);
         if (null != proxyPm) {
-            Reflections.setField("android.app.ActivityThread", sCat, "sPackageManager", proxyPm);
+            Reflecter.on("android.app.ActivityThread", sCat).set("sPackageManager", proxyPm);
         }
     }
 
@@ -86,25 +91,25 @@ public final class Hooks {
         if (sAtmHooked) {
             return;
         }
-        final Object singleton = Reflections.getField("android.app.ActivityTaskManager",
-                "IActivityTaskManagerSingleton", null);
-        final Object rawAtm = Reflections.getField("android.util.Singleton", "mInstance", singleton);
+        Object singleton = Reflecter.on("android.app.ActivityTaskManager")
+                .get("IActivityTaskManagerSingleton");
+        Object rawAtm = Reflecter.on("android.util.Singleton", singleton).get("mInstance");
         Log.d(TAG, "hookActivityTaskManager singleton: " + singleton + ", rawAm: " + rawAtm);
-        if (null == rawAtm) {
+        if (null == rawAtm || Proxy.isProxyClass(rawAtm.getClass())) {
             return;
         }
         sAtmHooked = true;
 
-        final Object proxyAtm = Proxies.newAtmProxy(context, (proxy, method, args) -> {
+        Object proxyAtm = Proxies.newAtmProxy(context, (proxy, method, args) -> {
             if (listener == null) {
                 return method.invoke(rawAtm, args);
             }
-            listener.before(rawAtm, method, args);
+            listener.before(rawAtm, method.getName(), args);
             return listener.after(method.invoke(rawAtm, args));
         });
         Log.d(TAG, "hookActivityTaskManager proxyAtm: " + proxyAtm);
         if (proxyAtm != null) {
-            Reflections.setField("android.util.Singleton", singleton, "mInstance", proxyAtm);
+            Reflecter.on("android.util.Singleton", singleton).set("mInstance", proxyAtm);
         }
     }
 
@@ -133,8 +138,8 @@ public final class Hooks {
             private String mName;
 
             @Override
-            public void before(final Object rawCaller, final Method method, final Object... args) {
-                mName = method.getName();
+            public void before(final Object rawCaller, final String method, final Object... args) {
+                mName = method;
                 Log.d(TAG, "method --------> " + mName);
                 if ("startActivity".equals(mName)) {
                     int index = -1;
@@ -172,8 +177,8 @@ public final class Hooks {
             private String mName;
 
             @Override
-            public void before(Object rawCaller, Method method, Object... args) {
-                mName = method.getName();
+            public void before(Object rawCaller, String method, Object... args) {
+                mName = method;
                 Log.d(TAG, "method --------> " + mName);
                 if ("getPackageInfo".equals(mName)) {
                     //
@@ -193,26 +198,20 @@ public final class Hooks {
     }
 
     public static void hookInstrumentation() {
-        final Object sCat = Reflections.getField("android.app.ActivityThread",
-                "sCurrentActivityThread", null);
-        final Object rawInst = Reflections.getField(sCat, "mInstrumentation", sCat);
-        final HookedInstrumentation hooked = new HookedInstrumentation((Instrumentation) rawInst);
-        Reflections.setField(sCat, sCat, "mInstrumentation", hooked);
+        Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
+        Object rawInst = Reflecter.on(sCat).get("mInstrumentation");
+        HookedInstrumentation hooked = new HookedInstrumentation((Instrumentation) rawInst);
+        Reflecter.on(sCat).set("mInstrumentation", hooked);
     }
 
     abstract public static class InvokeListener {
 
-        public void before(Object rawCaller, Method method, Object... args) {
+        public void before(Object rawCaller, String method, Object... args) {
         }
 
         public Object after(Object rawResult) {
             return rawResult;
         }
-    }
-
-    public interface MessageInterceptor {
-
-        boolean onMessage(Message msg);
     }
 
     public static class HookedInstrumentation extends Instrumentation {

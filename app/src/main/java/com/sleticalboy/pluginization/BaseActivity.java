@@ -10,8 +10,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.sleticalboy.pluginization.util.Hooks;
 
-import java.lang.reflect.Method;
-
 public class BaseActivity extends AppCompatActivity {
 
     private static final String TAG = "BaseActivity";
@@ -33,8 +31,8 @@ public class BaseActivity extends AppCompatActivity {
             private String mName;
 
             @Override
-            public void before(final Object rawCaller, final Method method, final Object... args) {
-                mName = method.getName();
+            public void before(final Object rawCaller, final String method, final Object... args) {
+                mName = method;
                 Log.d(TAG, "method --------> " + mName);
                 if ("startActivity".equals(mName)) {
                     // 启动未在 AndroidManifest.xml 文件中注册的 Activity
