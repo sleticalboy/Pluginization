@@ -6,9 +6,13 @@ import android.app.Instrumentation;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
@@ -21,8 +25,10 @@ import java.lang.reflect.Proxy;
 public final class Hooks {
 
     public static final String TAG = "Hooks";
-    public static final ComponentName PROXY_COMPONENT = new ComponentName(
+    public static final ComponentName PROXY_ACTIVITY = new ComponentName(
             "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyActivity");
+    public static final ComponentName PROXY_SERVICE = new ComponentName(
+            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyService");
     public static final String REAL_COMPONENT = "real_component";
 
     private static boolean sAtmHooked = false;
@@ -60,7 +66,7 @@ public final class Hooks {
         Object proxyAm;
         try {
             proxyAm = Reflecter.with(context.getClassLoader())
-                    .on("android.app.IActivityManager")
+                    .proxy("android.app.IActivityManager")
                     .handle(handler);
         } catch (Throwable e) {
             Log.e(TAG, "newAmProxy error", e);
@@ -88,7 +94,7 @@ public final class Hooks {
         try {
             // 生成 PackageManager 代理对象
             proxyPm = Reflecter.with(context.getClassLoader())
-                    .on("android.content.pm.IPackageManager")
+                    .proxy("android.content.pm.IPackageManager")
                     .handle(handler);
         } catch (Throwable e) {
             Log.e(TAG, "newPmProxy() error", e);
@@ -121,7 +127,7 @@ public final class Hooks {
         Object proxyAtm;
         try {
             proxyAtm = Reflecter.with(context.getClassLoader())
-                    .on("android.app.IActivityTaskManager")
+                    .proxy("android.app.IActivityTaskManager")
                     .handle(handler);
         } catch (Throwable e) {
             Log.e(TAG, "newAtmProxy() error", e);
@@ -135,31 +141,47 @@ public final class Hooks {
         if (app == null) {
             return;
         }
-        Hooks.hookHandlerCallback(msg -> {
-            switch (msg.what) {
-                default:
-                case Messages.LAUNCH_ACTIVITY:
-                case Messages.PAUSE_ACTIVITY:
-                case Messages.RESUME_ACTIVITY:
-                    break;
-                case Messages.EXECUTE_TRANSACTION:
-                    Log.d(TAG, "onMessage() action: " + Messages.codeToString(msg.what)
-                            + ", msg: " + /*JSON.toJSONString(msg)*/msg);
-                    break;
+        hookHandlerCallback(new Handler.Callback() {
+            private static final String TAG = Hooks.TAG + "-mCallback";
+            @Override
+            public boolean handleMessage(@NonNull Message msg) {
+                Log.d(TAG, "handleMessage() action: " + Messages.codeToString(msg.what));
+                switch (msg.what) {
+                    default:
+                    case Messages.LAUNCH_ACTIVITY:
+                    case Messages.PAUSE_ACTIVITY:
+                    case Messages.RESUME_ACTIVITY:
+                        break;
+                    case Messages.STOP_SERVICE:
+                    case Messages.SERVICE_ARGS:
+                        // Service#onStartCommand()
+                        break;
+                    case Messages.CREATE_SERVICE:
+                        handleStartService(TAG, msg.obj);
+                        break;
+                    case Messages.BIND_SERVICE:
+                    case Messages.UNBIND_SERVICE:
+                    case Messages.EXECUTE_TRANSACTION:
+                        Log.d(TAG, "handleMessage() msg: " + /*JSON.toJSONString(msg)*/msg);
+                        break;
+                }
+                return false;
             }
-            return false;
         });
 
         hookActivityManager(app, new InvokeListener() {
 
             public static final String TAG = Hooks.TAG + "-Am";
-            private String mName;
+            private boolean mStartActivity;
+            private boolean mStartService, mStopService;
 
             @Override
             public void before(final Object rawCaller, final String method, final Object... args) {
-                mName = method;
-                Log.d(TAG, "method --------> " + mName);
-                if ("startActivity".equals(mName)) {
+                Log.d(TAG, "method --------> " + method);
+                mStartActivity = "startActivity".equals(method);
+                mStartService = "startService".equals(method);
+                mStopService = "stopService".equals(method);
+                if (mStartActivity || mStartService || mStopService) {
                     int index = -1;
                     for (int i = 0; i < args.length; i++) {
                         if (args[i] instanceof Intent) {
@@ -172,17 +194,24 @@ public final class Hooks {
                         return;
                     }
                     final Intent raw = (Intent) args[index];
-                    Log.d(TAG, "index: " + index + ", raw intent: " + raw);
-                    // 启动未在 AndroidManifest.xml 文件中注册的 Activity
+                    Log.d(TAG, "before index: " + index + ", raw intent: " + raw);
+                    // 启动未在 AndroidManifest.xml 文件中注册的 Activity/Service
                     raw.putExtra(REAL_COMPONENT, raw.getComponent());
-                    // 替换 component 为 ProxyActivity, 此 Activity 已在 AndroidManifest 中声明
-                    raw.setComponent(PROXY_COMPONENT);
+                    // 替换 component 为 ProxyActivity/Service, 此 Activity/Service 已在
+                    // AndroidManifest 中声明
+                    if (mStartService || mStopService) {
+                        // stopService 时，内存中 ServiceInfo#name 字段已经是实际的 service 了
+                        raw.setComponent(PROXY_SERVICE);
+                    } else if (mStartActivity) {
+                        raw.setComponent(PROXY_ACTIVITY);
+                    }
+                    Log.d(TAG, "after index: " + index + ", raw intent: " + raw);
                 }
             }
 
             @Override
             public Object after(final Object rawResult) {
-                if ("startActivity".equals(mName)) {
+                if (mStartService || mStartActivity || mStopService) {
                     Log.d(TAG, "afterInvoke() result: " + rawResult);
                 }
                 return rawResult;
@@ -215,6 +244,29 @@ public final class Hooks {
         hookInstrumentation();
     }
 
+    private static void handleStartService(String tag, Object obj) {
+        if (obj == null) {
+            return;
+        }
+        // 这里的 intent 字段为 null
+        // Intent intent = (Intent) Reflecter.on(obj).get("intent");
+        // ComponentName component = intent.getParcelableExtra(REAL_COMPONENT);
+        // if (component == null) {
+        //     return;
+        // }
+        ServiceInfo info = (ServiceInfo) Reflecter.on(obj).get("info");
+        info.name = getRealService(info.name);
+        Log.d(tag, "handleStartService() service info: " + info);
+    }
+
+    private static void handleBindService(String tag, Object obj, boolean bind) {}
+
+    private static String getRealService(String name) {
+        // 通过事先配置好的映射关系来启动真正的 Service
+        // ProxyService -> AnotherService
+        return name.replace("Proxy", "Another");
+    }
+
     public static void hookInstrumentation() {
         Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
         Object rawInst = Reflecter.on(sCat).get("mInstrumentation");
@@ -234,7 +286,7 @@ public final class Hooks {
 
     public static class HookedInstrumentation extends Instrumentation {
 
-        private static final String TAG = "HookedInst";
+        private static final String TAG = Hooks.TAG + "-Inst";
 
         private final Instrumentation mBase;
 

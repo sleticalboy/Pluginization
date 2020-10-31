@@ -9,8 +9,17 @@ class MainActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        helloWorld.setOnClickListener {
+
+        startActivity.setOnClickListener {
             startActivity(Intent(this, AnotherActivity::class.java))
+        }
+
+        startService.setOnClickListener {
+            startService(Intent(this, AnotherService::class.java))
+        }
+
+        stopService.setOnClickListener {
+            stopService(Intent(this, AnotherService::class.java))
         }
     }
 }

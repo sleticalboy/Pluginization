@@ -230,6 +230,6 @@ public final class Messages {
                 result = Integer.toString(code);
                 break;
         }
-        return result;
+        return code + ": " + result;
     }
 }

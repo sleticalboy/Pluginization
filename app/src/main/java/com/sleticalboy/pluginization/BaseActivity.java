@@ -51,7 +51,7 @@ public class BaseActivity extends AppCompatActivity {
                     Log.d(TAG, "index: " + index + ", raw intent: " + raw);
                     // 替换 component 为 ProxyActivity, 此 Activity 已在 AndroidManifest 中声明
                     raw.putExtra(Hooks.REAL_COMPONENT, raw.getComponent());
-                    raw.setComponent(Hooks.PROXY_COMPONENT);
+                    raw.setComponent(Hooks.PROXY_ACTIVITY);
                 }
             }
 

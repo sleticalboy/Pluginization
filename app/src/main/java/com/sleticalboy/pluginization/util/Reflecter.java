@@ -194,7 +194,7 @@ public final class Reflecter {
             mLoader = loader;
         }
 
-        public Prox on(String... interfaces) {
+        public Prox proxy(String... interfaces) {
             if (null == interfaces || interfaces.length == 0) {
                 throw new IllegalArgumentException("interfaces is empty");
             }
@@ -206,7 +206,7 @@ public final class Reflecter {
             return this;
         }
 
-        public Prox on(Class<?>... interfaces) {
+        public Prox proxy(Class<?>... interfaces) {
             if (null == interfaces || interfaces.length == 0) {
                 throw new IllegalArgumentException("interfaces is empty");
             }
