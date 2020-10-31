@@ -152,15 +152,16 @@ public final class Hooks {
                     case Messages.PAUSE_ACTIVITY:
                     case Messages.RESUME_ACTIVITY:
                         break;
+                    case Messages.BIND_SERVICE:
+                    case Messages.UNBIND_SERVICE:
                     case Messages.STOP_SERVICE:
                     case Messages.SERVICE_ARGS:
                         // Service#onStartCommand()
                         break;
                     case Messages.CREATE_SERVICE:
-                        handleStartService(TAG, msg.obj);
+                        // start & bind Service 均会执行到这里
+                        handleCreateService(TAG, msg.obj);
                         break;
-                    case Messages.BIND_SERVICE:
-                    case Messages.UNBIND_SERVICE:
                     case Messages.EXECUTE_TRANSACTION:
                         Log.d(TAG, "handleMessage() msg: " + /*JSON.toJSONString(msg)*/msg);
                         break;
@@ -174,14 +175,21 @@ public final class Hooks {
             public static final String TAG = Hooks.TAG + "-Am";
             private boolean mStartActivity;
             private boolean mStartService, mStopService;
+            private boolean mBindService, mUnbindService;
 
             @Override
             public void before(final Object rawCaller, final String method, final Object... args) {
                 Log.d(TAG, "method --------> " + method);
                 mStartActivity = "startActivity".equals(method);
+                // start & stop service
                 mStartService = "startService".equals(method);
                 mStopService = "stopService".equals(method);
-                if (mStartActivity || mStartService || mStopService) {
+                // bind & unbind service
+                mBindService = "bindIsolatedService".equals(method);
+                mUnbindService = "unbindService".equals(method);
+
+                if (mStartActivity || mStartService || mStopService
+                        || mBindService || mUnbindService) {
                     int index = -1;
                     for (int i = 0; i < args.length; i++) {
                         if (args[i] instanceof Intent) {
@@ -199,11 +207,11 @@ public final class Hooks {
                     raw.putExtra(REAL_COMPONENT, raw.getComponent());
                     // 替换 component 为 ProxyActivity/Service, 此 Activity/Service 已在
                     // AndroidManifest 中声明
-                    if (mStartService || mStopService) {
+                    if (mStartActivity) {
+                        raw.setComponent(PROXY_ACTIVITY);
+                    } else {
                         // stopService 时，内存中 ServiceInfo#name 字段已经是实际的 service 了
                         raw.setComponent(PROXY_SERVICE);
-                    } else if (mStartActivity) {
-                        raw.setComponent(PROXY_ACTIVITY);
                     }
                     Log.d(TAG, "after index: " + index + ", raw intent: " + raw);
                 }
@@ -211,7 +219,8 @@ public final class Hooks {
 
             @Override
             public Object after(final Object rawResult) {
-                if (mStartService || mStartActivity || mStopService) {
+                if (mStartService || mStartActivity || mStopService
+                        || mBindService || mUnbindService) {
                     Log.d(TAG, "afterInvoke() result: " + rawResult);
                 }
                 return rawResult;
@@ -244,22 +253,13 @@ public final class Hooks {
         hookInstrumentation();
     }
 
-    private static void handleStartService(String tag, Object obj) {
-        if (obj == null) {
-            return;
+    private static void handleCreateService(String tag, Object obj) {
+        if (obj != null) {
+            ServiceInfo info = (ServiceInfo) Reflecter.on(obj).get("info");
+            info.name = getRealService(info.name);
+            Log.d(tag, "handleStartService() service info: " + info);
         }
-        // 这里的 intent 字段为 null
-        // Intent intent = (Intent) Reflecter.on(obj).get("intent");
-        // ComponentName component = intent.getParcelableExtra(REAL_COMPONENT);
-        // if (component == null) {
-        //     return;
-        // }
-        ServiceInfo info = (ServiceInfo) Reflecter.on(obj).get("info");
-        info.name = getRealService(info.name);
-        Log.d(tag, "handleStartService() service info: " + info);
     }
-
-    private static void handleBindService(String tag, Object obj, boolean bind) {}
 
     private static String getRealService(String name) {
         // 通过事先配置好的映射关系来启动真正的 Service

@@ -27,12 +27,14 @@ public final class AnotherService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(TAG, "onStartCommand() called with: intent = [" + intent + "]");
         return super.onStartCommand(intent, flags, startId);
     }
 
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
+        Log.d(TAG, "onBind() called with: intent = [" + intent + "]");
         if (mBinder == null) {
             mBinder = new LocalBinder(this);
         }

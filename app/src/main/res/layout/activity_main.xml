@@ -28,4 +28,20 @@
         android:padding="8dp"
         android:text="Stop Service" />
 
+    <TextView
+        android:layout_gravity="center_horizontal"
+        android:id="@+id/bindService"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="Bind Service" />
+
+    <TextView
+        android:layout_gravity="center_horizontal"
+        android:id="@+id/unbindService"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:text="Unbind Service" />
+
 </LinearLayout>
