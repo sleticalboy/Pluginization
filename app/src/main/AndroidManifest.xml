@@ -22,6 +22,16 @@
         <activity android:name=".ProxyActivity" />
 
         <service android:name=".ProxyService" />
+
+        <receiver android:name=".ProxyReceiver">
+            <intent-filter>
+                <action android:name="plubin.receiver_1.action_1" />
+                <action android:name="plubin.receiver_1.action_2" />
+                <action android:name="plubin.receiver_2.action_1" />
+                <action android:name="plubin.receiver_n.action_1" />
+                <!-- ... -->
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

@@ -3,19 +3,29 @@ package com.sleticalboy.pluginization.util;
 import android.app.Activity;
 import android.app.Application;
 import android.app.Instrumentation;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
+import android.os.IInterface;
 import android.os.Message;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import java.io.File;
+import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.util.List;
 
 /**
  * Created on 19-7-9.
@@ -162,6 +172,10 @@ public final class Hooks {
                         // start & bind Service 均会执行到这里
                         handleCreateService(TAG, msg.obj);
                         break;
+                    case Messages.RECEIVER:
+                        // the original logic is to initialize BroadcastReceiver and call its
+                        // onReceive() method
+                        break;
                     case Messages.EXECUTE_TRANSACTION:
                         Log.d(TAG, "handleMessage() msg: " + /*JSON.toJSONString(msg)*/msg);
                         break;
@@ -176,6 +190,7 @@ public final class Hooks {
             private boolean mStartActivity;
             private boolean mStartService, mStopService;
             private boolean mBindService, mUnbindService;
+            private boolean mRegister, mUnregister;
 
             @Override
             public void before(final Object rawCaller, final String method, final Object... args) {
@@ -187,31 +202,45 @@ public final class Hooks {
                 // bind & unbind service
                 mBindService = "bindIsolatedService".equals(method);
                 mUnbindService = "unbindService".equals(method);
+                // register & unregister receiver
+                mRegister = "registerReceiver".equals(method);
+                mUnregister = "unregisterReceiver".equals(method);
 
                 if (mStartActivity || mStartService || mStopService
-                        || mBindService || mUnbindService) {
+                        || mBindService || mUnbindService
+                        || mRegister || mUnregister) {
                     int index = -1;
                     for (int i = 0; i < args.length; i++) {
                         if (args[i] instanceof Intent) {
                             // 找到第一个 Intent 参数进行加工
                             index = i;
                             break;
+                        } else if (mRegister || mUnregister) {
+                            if ("android.app.LoadedApk$ReceiverDispatcher$InnerReceiver".equals(
+                                    args[i].getClass().getName())) {
+                                index = i;
+                                break;
+                            }
                         }
                     }
                     if (0 > index) {
                         return;
                     }
-                    final Intent raw = (Intent) args[index];
+                    final Object raw = args[index];
                     Log.d(TAG, "before index: " + index + ", raw intent: " + raw);
-                    // 启动未在 AndroidManifest.xml 文件中注册的 Activity/Service
-                    raw.putExtra(REAL_COMPONENT, raw.getComponent());
-                    // 替换 component 为 ProxyActivity/Service, 此 Activity/Service 已在
+                    if (!mRegister && !mUnregister) {
+                        // 启动未在 AndroidManifest.xml 文件中注册的 Activity/Service
+                        ((Intent) raw).putExtra(REAL_COMPONENT, ((Intent) raw).getComponent());
+                        // 替换 component 为 ProxyActivity/Service, 此 Activity/Service 已在
+                    }
                     // AndroidManifest 中声明
                     if (mStartActivity) {
-                        raw.setComponent(PROXY_ACTIVITY);
+                        ((Intent) raw).setComponent(PROXY_ACTIVITY);
+                    } else if (mRegister || mUnregister) {
+                        handleReceiver(raw);
                     } else {
                         // stopService 时，内存中 ServiceInfo#name 字段已经是实际的 service 了
-                        raw.setComponent(PROXY_SERVICE);
+                        ((Intent) raw).setComponent(PROXY_SERVICE);
                     }
                     Log.d(TAG, "after index: " + index + ", raw intent: " + raw);
                 }
@@ -220,7 +249,8 @@ public final class Hooks {
             @Override
             public Object after(final Object rawResult) {
                 if (mStartService || mStartActivity || mStopService
-                        || mBindService || mUnbindService) {
+                        || mBindService || mUnbindService
+                        || mRegister || mUnregister) {
                     Log.d(TAG, "afterInvoke() result: " + rawResult);
                 }
                 return rawResult;
@@ -272,6 +302,89 @@ public final class Hooks {
         Object rawInst = Reflecter.on(sCat).get("mInstrumentation");
         HookedInstrumentation hooked = new HookedInstrumentation((Instrumentation) rawInst);
         Reflecter.on(sCat).set("mInstrumentation", hooked);
+    }
+
+    private static void parsePackage(Context context, String plugin) {
+        File file;
+        try {
+            file = new File(plugin);
+        } catch (Throwable e) {
+            throw new IllegalArgumentException();
+        }
+        // android.content.pm.PackageParser
+        // public Package parsePackage(File packageFile, int flags)
+        Class<?>[] parameters = {File.class, int.class};
+        // plugin package info
+        final Object obj = Reflecter.on("android.content.pm.PackageParser", null/*pm instance*/)
+                .call("parsePackage", parameters, file, PackageManager.GET_RECEIVERS);
+        // Package#receivers
+        final List<?> receivers = (List<?>) Reflecter.on(obj).get("receivers");
+        for (Object receiver : receivers) {
+            // handle like a dynamic receiver
+            registerReceiver(context, receiver);
+        }
+    }
+
+    private static void registerReceiver(Context context, Object receiver) {
+        if (receiver != null) {
+            Log.d(TAG, "handleReceiver() receiver: " + receiver);
+        }
+        // android.content.pm.PackageParser$Component#intents
+        //                                      ^
+        //                                    super
+        //                                      |
+        // android.content.pm.PackageParser$Activity#intents
+        List<?> intents = (List<?>) Reflecter.on(receiver).get("intents");
+        for (Object intent : intents) {
+            // android.content.pm.PackageParser$Activity#info
+            ActivityInfo info = (ActivityInfo) Reflecter.on(intent).get("info");
+            BroadcastReceiver br = (BroadcastReceiver) Reflecter.on(info.name).create();
+            // Context#registerReceiver()
+            context.registerReceiver(br, ((IntentFilter) intent));
+        }
+    }
+
+    private static void handleReceiver(Object raw) {
+        // 以下均为测试代码，实际的项目中不会用到
+
+        // android.app.LoadedApk$ReceiverDispatcher$InnerReceiver#mDispatcher
+        // -> android.app.LoadedApk$ReceiverDispatcher
+        // android.app.LoadedApk$ReceiverDispatcher#mReceiver
+        // -> ProxyReceiver
+        // 此处通过反射获取 dispatcher 是会失败的，原因是 raw 对象是一个 binder 的 proxy
+        // Accessing hidden field Landroid/app/LoadedApk$ReceiverDispatcher$InnerReceiver;
+        // ->mDispatcher:Ljava/lang/ref/WeakReference;
+        // (greylist-max-o, reflection, denied)
+        if (raw instanceof IInterface) {
+            final IBinder binder = ((IInterface) raw).asBinder();
+            Log.d(TAG, "handleReceiver() as binder: " + binder);
+        }
+        // dispatcher is a WeakReference<android.app.LoadedApk$ReceiverDispatcher>
+        Object weakRef;
+        try {
+            weakRef = Reflecter.on(raw).get("mDispatcher");
+        } catch (Exception e) {
+            e.printStackTrace();
+            // fallback to mOwner field
+            try {
+                weakRef = Reflecter.on(raw).get("mOwner");
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                weakRef = null;
+            }
+        }
+        Log.d(TAG, "handleReceiver() weakRef: " + weakRef);
+
+        Object dispatcher = null;
+        if (weakRef instanceof WeakReference) {
+            dispatcher = ((WeakReference<?>) weakRef).get();
+        }
+        if (dispatcher == null) {
+            return;
+        }
+        Object receiver = Reflecter.on(dispatcher).get("mReceiver");
+        Log.d(TAG, "register or unregister receiver, dispatcher: " + dispatcher
+                +  ", receiver: " + receiver);
     }
 
     abstract public static class InvokeListener {

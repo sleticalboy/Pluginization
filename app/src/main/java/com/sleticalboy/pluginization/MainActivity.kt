@@ -2,6 +2,7 @@ package com.sleticalboy.pluginization
 
 import android.content.ComponentName
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
@@ -19,6 +20,7 @@ class MainActivity : BaseActivity() {
             Log.d(TAG, "onServiceDisconnected() name = $name")
         }
     }
+    private val mReceiver = AnotherReceiver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,21 +30,29 @@ class MainActivity : BaseActivity() {
             startActivity(Intent(this, AnotherActivity::class.java))
         }
 
+        // start & stop service
         startService.setOnClickListener {
             startService(Intent(this, AnotherService::class.java))
         }
-
         stopService.setOnClickListener {
             stopService(Intent(this, AnotherService::class.java))
         }
 
+        // bind & unbind service
         bindService.setOnClickListener {
             bindService(Intent(this, AnotherService::class.java),
                 mConnection, BIND_AUTO_CREATE)
         }
-
         unbindService.setOnClickListener {
             unbindService(mConnection)
+        }
+
+        // register & unregister receiver
+        register.setOnClickListener {
+            registerReceiver(mReceiver, IntentFilter(Intent.ACTION_ANSWER))
+        }
+        unregister.setOnClickListener {
+            unregisterReceiver(mReceiver)
         }
     }
 
