@@ -5,9 +5,9 @@ import android.content.ComponentName;
 public final class Constants {
 
     public static final ComponentName PROXY_ACTIVITY = new ComponentName(
-            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyActivity");
+            "com.binlee.pluginization", "com.binlee.pluginization.ProxyActivity");
     public static final ComponentName PROXY_SERVICE = new ComponentName(
-            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyService");
+            "com.binlee.pluginization", "com.binlee.pluginization.ProxyService");
     public static final String REAL_COMPONENT = "real_component";
 
     public static final int LAUNCH_ACTIVITY = 100;

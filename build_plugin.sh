@@ -8,4 +8,4 @@ cp plugin/build/outputs/apk/debug/plugin-debug.apk app/src/main/assets/
 echo "start building host apk..."
 
 ./gradlew :app:installDebug
-adb shell am start -n com.sleticalboy.pluginization/.MainActivity
+adb shell am start -n com.binlee.pluginization/.MainActivity

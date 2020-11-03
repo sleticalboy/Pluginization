@@ -43,11 +43,11 @@ public class PluginizationApp extends Application {
             IOs.copy(getAssets().open("plugin-debug.apk"), file);
             Log.d(TAG, "plugin: " + file + ", exists: " + file.exists());
 
-            // Unable to get provider com.sleticalboy.plugin.AnotherProvider:
+            // Unable to get provider com.binlee.plugin.AnotherProvider:
             // java.lang.ClassNotFoundException:
-            // Didn't find class "com.sleticalboy.plugin.AnotherProvider" on path:
-            // DexPathList[[zip file "/data/app/com.sleticalboy.pluginization-KD7bSTMHikFhOr0D6ZiMvA==/base.apk"],
-            // nativeLibraryDirectories=[/data/app/com.sleticalboy.pluginization-KD7bSTMHikFhOr0D6ZiMvA==/lib/arm64, /system/lib64, /vendor/lib64]]
+            // Didn't find class "com.binlee.plugin.AnotherProvider" on path:
+            // DexPathList[[zip file "/data/app/com.binlee.pluginization-KD7bSTMHikFhOr0D6ZiMvA==/base.apk"],
+            // nativeLibraryDirectories=[/data/app/com.binlee.pluginization-KD7bSTMHikFhOr0D6ZiMvA==/lib/arm64, /system/lib64, /vendor/lib64]]
 
             // merge dex
             DexMerger.merge(this, new String[] {file.getAbsolutePath()});
