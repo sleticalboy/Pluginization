@@ -8,6 +8,7 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.sleticalboy.pluginization.util.Constants;
 import com.sleticalboy.pluginization.util.Hooks;
 
 public class BaseActivity extends AppCompatActivity {
@@ -50,8 +51,8 @@ public class BaseActivity extends AppCompatActivity {
                     final Intent raw = (Intent) args[index];
                     Log.d(TAG, "index: " + index + ", raw intent: " + raw);
                     // 替换 component 为 ProxyActivity, 此 Activity 已在 AndroidManifest 中声明
-                    raw.putExtra(Hooks.REAL_COMPONENT, raw.getComponent());
-                    raw.setComponent(Hooks.PROXY_ACTIVITY);
+                    raw.putExtra(Constants.REAL_COMPONENT, raw.getComponent());
+                    raw.setComponent(Constants.PROXY_ACTIVITY);
                 }
             }
 

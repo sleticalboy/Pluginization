@@ -10,8 +10,9 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
 import android.content.pm.ServiceInfo;
-import android.os.Binder;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -25,6 +26,7 @@ import java.io.File;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,11 +37,6 @@ import java.util.List;
 public final class Hooks {
 
     public static final String TAG = "Hooks";
-    public static final ComponentName PROXY_ACTIVITY = new ComponentName(
-            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyActivity");
-    public static final ComponentName PROXY_SERVICE = new ComponentName(
-            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyService");
-    public static final String REAL_COMPONENT = "real_component";
 
     private static boolean sAtmHooked = false;
 
@@ -115,7 +112,8 @@ public final class Hooks {
     }
 
     public static void hookActivityTaskManager(Context context, InvokeListener listener) {
-        if (sAtmHooked) {
+        // only supported after android Q
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || sAtmHooked) {
             return;
         }
         Object singleton = Reflecter.on("android.app.ActivityTaskManager")
@@ -153,30 +151,31 @@ public final class Hooks {
         }
         hookHandlerCallback(new Handler.Callback() {
             private static final String TAG = Hooks.TAG + "-mCallback";
+
             @Override
             public boolean handleMessage(@NonNull Message msg) {
-                Log.d(TAG, "handleMessage() action: " + Messages.codeToString(msg.what));
+                Log.d(TAG, "handleMessage() action: " + Constants.codeToString(msg.what));
                 switch (msg.what) {
                     default:
-                    case Messages.LAUNCH_ACTIVITY:
-                    case Messages.PAUSE_ACTIVITY:
-                    case Messages.RESUME_ACTIVITY:
+                    case Constants.LAUNCH_ACTIVITY:
+                    case Constants.PAUSE_ACTIVITY:
+                    case Constants.RESUME_ACTIVITY:
                         break;
-                    case Messages.BIND_SERVICE:
-                    case Messages.UNBIND_SERVICE:
-                    case Messages.STOP_SERVICE:
-                    case Messages.SERVICE_ARGS:
+                    case Constants.BIND_SERVICE:
+                    case Constants.UNBIND_SERVICE:
+                    case Constants.STOP_SERVICE:
+                    case Constants.SERVICE_ARGS:
                         // Service#onStartCommand()
                         break;
-                    case Messages.CREATE_SERVICE:
+                    case Constants.CREATE_SERVICE:
                         // start & bind Service 均会执行到这里
                         handleCreateService(TAG, msg.obj);
                         break;
-                    case Messages.RECEIVER:
+                    case Constants.RECEIVER:
                         // the original logic is to initialize BroadcastReceiver and call its
                         // onReceive() method
                         break;
-                    case Messages.EXECUTE_TRANSACTION:
+                    case Constants.EXECUTE_TRANSACTION:
                         Log.d(TAG, "handleMessage() msg: " + /*JSON.toJSONString(msg)*/msg);
                         break;
                 }
@@ -187,6 +186,7 @@ public final class Hooks {
         hookActivityManager(app, new InvokeListener() {
 
             public static final String TAG = Hooks.TAG + "-Am";
+            // supported before android P
             private boolean mStartActivity;
             private boolean mStartService, mStopService;
             private boolean mBindService, mUnbindService;
@@ -230,17 +230,17 @@ public final class Hooks {
                     Log.d(TAG, "before index: " + index + ", raw intent: " + raw);
                     if (!mRegister && !mUnregister) {
                         // 启动未在 AndroidManifest.xml 文件中注册的 Activity/Service
-                        ((Intent) raw).putExtra(REAL_COMPONENT, ((Intent) raw).getComponent());
+                        ((Intent) raw).putExtra(Constants.REAL_COMPONENT, ((Intent) raw).getComponent());
                         // 替换 component 为 ProxyActivity/Service, 此 Activity/Service 已在
                     }
                     // AndroidManifest 中声明
                     if (mStartActivity) {
-                        ((Intent) raw).setComponent(PROXY_ACTIVITY);
+                        ((Intent) raw).setComponent(Constants.PROXY_ACTIVITY);
                     } else if (mRegister || mUnregister) {
                         handleReceiver(raw);
                     } else {
                         // stopService 时，内存中 ServiceInfo#name 字段已经是实际的 service 了
-                        ((Intent) raw).setComponent(PROXY_SERVICE);
+                        ((Intent) raw).setComponent(Constants.PROXY_SERVICE);
                     }
                     Log.d(TAG, "after index: " + index + ", raw intent: " + raw);
                 }
@@ -304,21 +304,25 @@ public final class Hooks {
         Reflecter.on(sCat).set("mInstrumentation", hooked);
     }
 
-    private static void parsePackage(Context context, String plugin) {
+    private static void parseReceivers(Context context, String plugin) {
         File file;
         try {
             file = new File(plugin);
         } catch (Throwable e) {
             throw new IllegalArgumentException();
         }
+        Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
+        // 获取原 sPackageManager 字段
+        Object sPm = Reflecter.on(sCat).get("sPackageManager");
         // android.content.pm.PackageParser
         // public Package parsePackage(File packageFile, int flags)
         Class<?>[] parameters = {File.class, int.class};
+        Object[] args = {file, PackageManager.GET_RECEIVERS};
         // plugin package info
-        final Object obj = Reflecter.on("android.content.pm.PackageParser", null/*pm instance*/)
-                .call("parsePackage", parameters, file, PackageManager.GET_RECEIVERS);
-        // Package#receivers
-        final List<?> receivers = (List<?>) Reflecter.on(obj).get("receivers");
+        Object obj = Reflecter.on("android.content.pm.PackageParser", sPm/*pm instance*/)
+                .call("parsePackage", parameters, args);
+        // Package#receivers -> ArrayList<Activity>
+        List<?> receivers = (List<?>) Reflecter.on(obj).get("receivers");
         for (Object receiver : receivers) {
             // handle like a dynamic receiver
             registerReceiver(context, receiver);
@@ -384,7 +388,53 @@ public final class Hooks {
         }
         Object receiver = Reflecter.on(dispatcher).get("mReceiver");
         Log.d(TAG, "register or unregister receiver, dispatcher: " + dispatcher
-                +  ", receiver: " + receiver);
+                + ", receiver: " + receiver);
+    }
+
+    public static void parseProviders(Context context, String plugin) {
+        // 可以在宿主 apk 的 Application#attachBaseContent() 方法中执行此方法
+        File file;
+        try {
+            file = new File(plugin);
+        } catch (Throwable e) {
+            throw new IllegalArgumentException();
+        }
+
+        // android.content.pm.PackageParser
+        // public Package parsePackage(File packageFile, int flags)
+        Object parser = Reflecter.on("android.content.pm.PackageParser").create();
+        // parse plugin package info
+        Class<?>[] parameters = {File.class, int.class};
+        Object[] args = {file, PackageManager.GET_PROVIDERS};
+        Object packageInfo = Reflecter.on(parser).call("parsePackage", parameters, args);
+
+        // get providers form Package#providers -> ArrayList<Provider>
+        List<?> providers = (List<?>) Reflecter.on(packageInfo).get("providers");
+
+        // prepare params for android.content.pm.PackageParser
+        // static generateProviderInfo(Provider p, int flags, PackageUserState state, int userId)
+        Object state = Reflecter.on("android.content.pm.PackageUserState").create();
+        int userId = (int) Reflecter.on("android.os.UserHandle").call("getCallingUserId");
+        parameters = new Class[]{providers.get(0).getClass(), int.class, state.getClass(), int.class};
+        args = new Object[]{null/*provider*/, 0, state, userId};
+
+        List<ProviderInfo> infoList = new ArrayList<>(providers.size());
+        for (Object p : providers) {
+            args[0] = p;
+            ProviderInfo info = (ProviderInfo) Reflecter.on(parser.getClass())
+                    .call("generateProviderInfo", parameters, args);
+            // 将插件的 packageName 替换为宿主的 packageName
+            info.applicationInfo.packageName = context.getPackageName();
+            infoList.add(info);
+        }
+        Log.d(TAG, "infoList: " + infoList);
+
+        // install providers
+        // ActivityThread -> private void installContentProviders(
+        //         Context context, List<ProviderInfo> providers)
+        parameters = new Class[]{Context.class, List.class};
+        args = new Object[]{context, infoList};
+        // Reflecter.on(sCat).call("installContentProviders", parameters, args);
     }
 
     abstract public static class InvokeListener {
@@ -414,7 +464,7 @@ public final class Hooks {
             Log.d(TAG, "newActivity() called with: className = [" + className
                     + "], intent = [" + intent + "]");
             // 取出真正要启动的 Activity 并实例化
-            final ComponentName component = intent.getParcelableExtra(REAL_COMPONENT);
+            final ComponentName component = intent.getParcelableExtra(Constants.REAL_COMPONENT);
             final String realClass = null != component ? component.getClassName() : className;
             return mBase.newActivity(cl, realClass, intent);
         }

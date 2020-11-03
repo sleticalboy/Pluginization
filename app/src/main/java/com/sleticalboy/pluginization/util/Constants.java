@@ -1,10 +1,14 @@
 package com.sleticalboy.pluginization.util;
 
-public final class Messages {
+import android.content.ComponentName;
 
-    private Messages() {
-        //no instance
-    }
+public final class Constants {
+
+    public static final ComponentName PROXY_ACTIVITY = new ComponentName(
+            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyActivity");
+    public static final ComponentName PROXY_SERVICE = new ComponentName(
+            "com.sleticalboy.pluginization", "com.sleticalboy.pluginization.ProxyService");
+    public static final String REAL_COMPONENT = "real_component";
 
     public static final int LAUNCH_ACTIVITY = 100;
     public static final int PAUSE_ACTIVITY = 101;
@@ -231,5 +235,9 @@ public final class Messages {
                 break;
         }
         return code + ": " + result;
+    }
+
+    private Constants() {
+        //no instance
     }
 }

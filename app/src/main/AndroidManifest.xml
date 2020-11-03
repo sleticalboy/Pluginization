@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.sleticalboy.pluginization">
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <application
         android:name="com.sleticalboy.pluginization.PluginizationApp"
@@ -32,6 +36,12 @@
                 <!-- ... -->
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name=".ProxyProvider"
+            android:authorities="com.sleticalboy.data_provider"
+            android:exported="true"
+            android:permission="xxx" />
     </application>
 
 </manifest>
