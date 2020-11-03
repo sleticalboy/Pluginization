@@ -1,2 +1,3 @@
-rootProject.name='Pluginization'
 include ':app'
+include ':plugin'
+rootProject.name='Pluginization'

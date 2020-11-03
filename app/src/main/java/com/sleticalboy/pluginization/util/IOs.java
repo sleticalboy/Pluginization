@@ -39,6 +39,9 @@ public final class IOs {
     }
 
     public static void copy(InputStream source, File destination) throws IOException {
+        if (destination.exists() && destination.delete()) {
+            Log.d("IOs", "copy() delete " + destination);
+        }
         copy(source, new FileOutputStream(destination));
     }
 
