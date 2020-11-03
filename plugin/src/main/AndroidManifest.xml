@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.sleticalboy.plugin">
+    package="com.binlee.plugin">
 
     <application
         android:allowBackup="true"
@@ -9,7 +9,7 @@
         android:theme="@style/Theme.Pluginization">
 
         <provider
-            android:name=".AnotherProvider"
+            android:name="com.binlee.plugin.AnotherProvider"
             android:authorities="xxx"
             android:exported="true"
             android:permission="xxx" />

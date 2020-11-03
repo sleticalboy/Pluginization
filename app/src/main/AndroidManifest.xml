@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.sleticalboy.pluginization">
+    package="com.binlee.pluginization">
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <application
-        android:name="com.sleticalboy.pluginization.PluginizationApp"
+        android:name="com.binlee.pluginization.PluginizationApp"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -15,7 +15,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".MainActivity">
+        <activity android:name="com.binlee.pluginization.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <action android:name="android.intent.action.VIEW" />
@@ -24,11 +24,11 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".ProxyActivity" />
+        <activity android:name="com.binlee.pluginization.ProxyActivity" />
 
-        <service android:name=".ProxyService" />
+        <service android:name="com.binlee.pluginization.ProxyService" />
 
-        <receiver android:name=".ProxyReceiver">
+        <receiver android:name="com.binlee.pluginization.ProxyReceiver">
             <intent-filter>
                 <action android:name="plubin.receiver_1.action_1" />
                 <action android:name="plubin.receiver_1.action_2" />
@@ -39,8 +39,8 @@
         </receiver>
 
         <provider
-            android:name=".ProxyProvider"
-            android:authorities="com.sleticalboy.data_provider"
+            android:name="com.binlee.pluginization.ProxyProvider"
+            android:authorities="com.binlee.data_provider"
             android:exported="true"
             android:permission="xxx" />
     </application>
