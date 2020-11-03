@@ -38,7 +38,7 @@ public class PluginizationApp extends Application {
     private void doHook() throws Exception {
         Hooks.init(this);
         File file = IOs.file(getApplicationInfo().dataDir + "/files/plugin/plugin-debug.apk");
-        IOs.copy("/storage/emulated/0/plugin-debug.apk", file);
+        IOs.copy(getAssets().open("plugin-debug.apk"), file);
         Log.d(TAG, "plugin: " + file + ", exists: " + file.exists());
         Hooks.parseProviders(this, file.getAbsolutePath());
     }

@@ -393,6 +393,7 @@ public final class Hooks {
 
     public static void parseProviders(Context context, String plugin) {
         // 可以在宿主 apk 的 Application#attachBaseContent() 方法中执行此方法
+        // 在此之前，需要先将插件中的 dex 合并到宿主中
         File file;
         try {
             file = new File(plugin);
@@ -434,7 +435,8 @@ public final class Hooks {
         //         Context context, List<ProviderInfo> providers)
         parameters = new Class[]{Context.class, List.class};
         args = new Object[]{context, infoList};
-        // Reflecter.on(sCat).call("installContentProviders", parameters, args);
+        Object sCat = Reflecter.on("android.app.ActivityThread").get("sCurrentActivityThread");
+        Reflecter.on(sCat).call("installContentProviders", parameters, args);
     }
 
     abstract public static class InvokeListener {

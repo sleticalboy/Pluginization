@@ -38,6 +38,10 @@ public final class IOs {
         copy(source, new FileOutputStream(destination));
     }
 
+    public static void copy(InputStream source, File destination) throws IOException {
+        copy(source, new FileOutputStream(destination));
+    }
+
     public static void copy(InputStream source, OutputStream destination) throws IOException {
         BufferedInputStream bis = new BufferedInputStream(source);
         BufferedOutputStream bos = new BufferedOutputStream(destination);
