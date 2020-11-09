@@ -6,6 +6,8 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * Created on 20-10-30.
@@ -60,14 +62,6 @@ public final class Reflecter {
         } catch (ClassNotFoundException e) {
             throw new ReflectException("forName()", e);
         }
-    }
-
-    private static String getPackage(Class<?> cls) {
-        if (null == cls) {
-            return "";
-        }
-        final Package pkg = cls.getPackage();
-        return null == pkg ? "" : pkg.getName();
     }
 
     public static class Reflekt {
@@ -216,6 +210,43 @@ public final class Reflecter {
 
         public Object handle(InvocationHandler handler) {
             return Proxy.newProxyInstance(mLoader, mInterfaces, handler);
+        }
+    }
+
+    private static String getPackage(Class<?> cls) {
+        if (null == cls) {
+            return "";
+        }
+        final Package pkg = cls.getPackage();
+        return null == pkg ? "" : pkg.getName();
+    }
+
+    // weak classes cache
+    private static final Map<String, Class<?>> CLASSES = new WeakHashMap<>();
+
+    private static Class<?> load(String clazz) throws ReflectException {
+        Class<?> klass = CLASSES.get(clazz);
+        if (klass != null) {
+            return klass;
+        }
+        try {
+            klass = Class.forName(clazz);
+            CLASSES.put(clazz, klass);
+            return klass;
+        } catch (ClassNotFoundException ignored) {
+        }
+        try {
+            klass = Class.forName(clazz, false, Thread.currentThread().getContextClassLoader());
+            CLASSES.put(clazz, klass);
+            return klass;
+        } catch (ClassNotFoundException ignored) {
+        }
+        try {
+            klass = ClassLoader.getSystemClassLoader().loadClass(clazz);
+            CLASSES.put(clazz, klass);
+            return klass;
+        } catch (ClassNotFoundException e) {
+            throw new ReflectException("load() class: " + clazz, e);
         }
     }
 }
